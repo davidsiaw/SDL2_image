@@ -31,6 +31,8 @@
 
 #ifdef LOAD_JPG
 
+
+
 #include <jpeglib.h>
 
 #ifdef JPEG_TRUE  /* MinGW version of jpeg-8.x renamed TRUE to JPEG_TRUE etc. */
@@ -368,7 +370,7 @@ static void my_error_exit(j_common_ptr cinfo)
 
 static void output_no_message(j_common_ptr cinfo)
 {
-    /* do nothing */
+	/* Do nothing */
 }
 
 /* Load a JPEG type image from an SDL datasource */
@@ -378,6 +380,7 @@ SDL_Surface *IMG_LoadJPG_RW(SDL_RWops *src)
     struct jpeg_decompress_struct cinfo;
     JSAMPROW rowptr[1];
     SDL_Surface *volatile surface = NULL;
+	char buffer[JMSG_LENGTH_MAX];
     struct my_error_mgr jerr;
 
     if ( !src ) {
@@ -400,8 +403,11 @@ SDL_Surface *IMG_LoadJPG_RW(SDL_RWops *src)
         if ( surface != NULL ) {
             SDL_FreeSurface(surface);
         }
+		
+		cinfo.err->format_message((j_common_ptr)&cinfo, buffer);
+		IMG_SetError("JPEG loading error: %s", buffer);
+
         SDL_RWseek(src, start, RW_SEEK_SET);
-        IMG_SetError("JPEG loading error");
         return NULL;
     }
 

@@ -21,7 +21,6 @@
 #include "jinclude.h"
 #include "jpeglib.h"
 
-
 /*
  * Initialization of a JPEG decompression object.
  * The error manager must already be set up (in case memory manager fails).
