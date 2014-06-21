@@ -153,6 +153,8 @@
 /* Begin PBXProject section */
 		0867D690FE84028FC02AAC07 /* Project object */ = {
 			isa = PBXProject;
+			attributes = {
+			};
 			buildConfigurationList = 00B7E3B6097EB73D00826121 /* Build configuration list for PBXProject "SDL_image" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = English;
@@ -240,9 +242,11 @@
 		007288130F0DA5BA00C302A9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				GCC_ENABLE_FIX_AND_CONTINUE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 5.1.1;
 				LIBRARY_STYLE = STATIC;
 				PRODUCT_NAME = SDL2_image;
 				SECTORDER_FLAGS = "";
@@ -279,9 +283,11 @@
 		007288170F0DA5C400C302A9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				GCC_ENABLE_FIX_AND_CONTINUE = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 5.1.1;
 				LIBRARY_STYLE = STATIC;
 				PRODUCT_NAME = SDL2_image;
 				SECTORDER_FLAGS = "";
