@@ -1,6 +1,6 @@
 /*
   SDL_image:  An example image loading library for use with SDL
-  Copyright (C) 1997-2013 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -32,8 +32,6 @@
  *  single-planar packed-pixel formats other than 8bpp
  *  4-plane 32bpp format with a fourth "intensity" plane
  */
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "SDL_endian.h"
 
@@ -149,7 +147,7 @@ SDL_Surface *IMG_LoadPCX_RW(SDL_RWops *src)
     if (bpl > surface->pitch) {
         error = "bytes per line is too large (corrupt?)";
     }
-    buf = (Uint8 *)SDL_malloc(bpl);
+    buf = (Uint8 *)SDL_calloc(SDL_max(bpl, surface->pitch), 1);
     row = (Uint8 *)surface->pixels;
     for ( y=0; y<surface->h; ++y ) {
         /* decode a scan line to a temporary buffer first */
@@ -254,7 +252,7 @@ done:
             SDL_FreeSurface(surface);
             surface = NULL;
         }
-        IMG_SetError(error);
+        IMG_SetError("%s", error);
     }
     return(surface);
 }

@@ -1,6 +1,6 @@
 /*
   SDL_image:  An example image loading library for use with SDL
-  Copyright (C) 1997-2013 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -20,9 +20,6 @@
 */
 
 /* This is a XV thumbnail image file loading framework */
-
-#include <stdio.h>
-#include <string.h>
 
 #include "SDL_image.h"
 
@@ -143,7 +140,7 @@ done:
             SDL_FreeSurface(surface);
             surface = NULL;
         }
-        IMG_SetError(error);
+        IMG_SetError("%s", error);
     }
     return surface;
 }

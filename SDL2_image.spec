@@ -1,5 +1,5 @@
 %define name SDL2_image
-%define version 2.0.0
+%define version 2.0.3
 %define release 1
 
 Summary: Simple DirectMedia Layer - Sample Image Loading Library
@@ -49,7 +49,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root)
-%doc README CHANGES COPYING
+%doc README.txt CHANGES.txt COPYING.txt
 %{prefix}/lib/lib*.so.*
 
 %files devel

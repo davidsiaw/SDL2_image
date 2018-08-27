@@ -1,6 +1,6 @@
 /*
   SDL_image:  An example image loading library for use with SDL
-  Copyright (C) 1997-2013 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2018 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -29,9 +29,6 @@
  * A good test suite of BMP images is available at:
  * http://entropymine.com/jason/bmpsuite/bmpsuite/html/bmpsuite.html
  */
-
-#include <stdio.h>
-#include <string.h>
 
 #include "SDL_image.h"
 
@@ -225,15 +222,17 @@ static SDL_Surface *LoadBMP_RW (SDL_RWops *src, int freesrc)
     int bmpPitch;
     int i, pad;
     SDL_Surface *surface;
-    Uint32 Rmask;
-    Uint32 Gmask;
-    Uint32 Bmask;
-    Uint32 Amask;
+    Uint32 Rmask = 0;
+    Uint32 Gmask = 0;
+    Uint32 Bmask = 0;
+    Uint32 Amask = 0;
     SDL_Palette *palette;
     Uint8 *bits;
     Uint8 *top, *end;
     SDL_bool topDown;
     int ExpandBMP;
+    SDL_bool haveRGBMasks = SDL_FALSE;
+    SDL_bool haveAlphaMask = SDL_FALSE;
     SDL_bool correctAlpha = SDL_FALSE;
 
     /* The Win32 BMP file header (14 bytes) */
@@ -246,7 +245,7 @@ static SDL_Surface *LoadBMP_RW (SDL_RWops *src, int freesrc)
     /* The Win32 BITMAPINFOHEADER struct (40 bytes) */
     Uint32 biSize;
     Sint32 biWidth;
-    Sint32 biHeight;
+    Sint32 biHeight = 0;
     Uint16 biPlanes;
     Uint16 biBitCount;
     Uint32 biCompression;
@@ -284,7 +283,7 @@ static SDL_Surface *LoadBMP_RW (SDL_RWops *src, int freesrc)
 
     /* Read the Win32 BITMAPINFOHEADER */
     biSize      = SDL_ReadLE32(src);
-    if ( biSize == 12 ) {
+    if ( biSize == 12 ) {   /* really old BITMAPCOREHEADER */
         biWidth     = (Uint32)SDL_ReadLE16(src);
         biHeight    = (Uint32)SDL_ReadLE16(src);
         biPlanes    = SDL_ReadLE16(src);
@@ -295,7 +294,8 @@ static SDL_Surface *LoadBMP_RW (SDL_RWops *src, int freesrc)
         biYPelsPerMeter = 0;
         biClrUsed   = 0;
         biClrImportant  = 0;
-    } else {
+    } else if (biSize >= 40) {  /* some version of BITMAPINFOHEADER */
+        Uint32 headerSize;
         biWidth     = SDL_ReadLE32(src);
         biHeight    = SDL_ReadLE32(src);
         biPlanes    = SDL_ReadLE16(src);
@@ -306,6 +306,50 @@ static SDL_Surface *LoadBMP_RW (SDL_RWops *src, int freesrc)
         biYPelsPerMeter = SDL_ReadLE32(src);
         biClrUsed   = SDL_ReadLE32(src);
         biClrImportant  = SDL_ReadLE32(src);
+
+        /* 64 == BITMAPCOREHEADER2, an incompatible OS/2 2.x extension. Skip this stuff for now. */
+        if (biSize != 64) {
+            /* This is complicated. If compression is BI_BITFIELDS, then
+               we have 3 DWORDS that specify the RGB masks. This is either
+               stored here in an BITMAPV2INFOHEADER (which only differs in
+               that it adds these RGB masks) and biSize >= 52, or we've got
+               these masks stored in the exact same place, but strictly
+               speaking, this is the bmiColors field in BITMAPINFO immediately
+               following the legacy v1 info header, just past biSize. */
+            if (biCompression == BI_BITFIELDS) {
+                haveRGBMasks = SDL_TRUE;
+                Rmask = SDL_ReadLE32(src);
+                Gmask = SDL_ReadLE32(src);
+                Bmask = SDL_ReadLE32(src);
+
+                /* ...v3 adds an alpha mask. */
+                if (biSize >= 56) {  /* BITMAPV3INFOHEADER; adds alpha mask */
+                    haveAlphaMask = SDL_TRUE;
+                    Amask = SDL_ReadLE32(src);
+                }
+            } else {
+                /* the mask fields are ignored for v2+ headers if not BI_BITFIELD. */
+                if (biSize >= 52) {  /* BITMAPV2INFOHEADER; adds RGB masks */
+                    /*Rmask = */ SDL_ReadLE32(src);
+                    /*Gmask = */ SDL_ReadLE32(src);
+                    /*Bmask = */ SDL_ReadLE32(src);
+                }
+                if (biSize >= 56) {  /* BITMAPV3INFOHEADER; adds alpha mask */
+                    /*Amask = */ SDL_ReadLE32(src);
+                }
+            }
+
+            /* Insert other fields here; Wikipedia and MSDN say we're up to
+               v5 of this header, but we ignore those for now (they add gamma,
+               color spaces, etc). Ignoring the weird OS/2 2.x format, we
+               currently parse up to v3 correctly (hopefully!). */
+        }
+
+        /* skip any header bytes we didn't handle... */
+        headerSize = (Uint32) (SDL_RWtell(src) - (fp_offset + 14));
+        if (biSize > headerSize) {
+            SDL_RWseek(src, (biSize - headerSize), RW_SEEK_CUR);
+        }
     }
     if (biHeight < 0) {
         topDown = SDL_TRUE;
@@ -315,7 +359,7 @@ static SDL_Surface *LoadBMP_RW (SDL_RWops *src, int freesrc)
     }
 
     /* Check for read error */
-    if ( strcmp(SDL_GetError(), "") != 0 ) {
+    if (SDL_strcmp(SDL_GetError(), "") != 0) {
         was_error = SDL_TRUE;
         goto done;
     }
@@ -333,62 +377,47 @@ static SDL_Surface *LoadBMP_RW (SDL_RWops *src, int freesrc)
     }
 
     /* RLE4 and RLE8 BMP compression is supported */
-    Rmask = Gmask = Bmask = Amask = 0;
     switch (biCompression) {
         case BI_RGB:
             /* If there are no masks, use the defaults */
-            if ( bfOffBits == (14+biSize) ) {
-                /* Default values for the BMP format */
-                switch (biBitCount) {
-                    case 15:
-                    case 16:
-                        Rmask = 0x7C00;
-                        Gmask = 0x03E0;
-                        Bmask = 0x001F;
-                        break;
-                    case 24:
+            SDL_assert(!haveRGBMasks);
+            SDL_assert(!haveAlphaMask);
+            /* Default values for the BMP format */
+            switch (biBitCount) {
+            case 15:
+            case 16:
+                Rmask = 0x7C00;
+                Gmask = 0x03E0;
+                Bmask = 0x001F;
+                break;
+            case 24:
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
-                        Rmask = 0x000000FF;
-                        Gmask = 0x0000FF00;
-                        Bmask = 0x00FF0000;
+                Rmask = 0x000000FF;
+                Gmask = 0x0000FF00;
+                Bmask = 0x00FF0000;
 #else
-                        Rmask = 0x00FF0000;
-                        Gmask = 0x0000FF00;
-                        Bmask = 0x000000FF;
+                Rmask = 0x00FF0000;
+                Gmask = 0x0000FF00;
+                Bmask = 0x000000FF;
 #endif
-                        break;
-                    case 32:
-                        /* We don't know if this has alpha channel or not */
-                        correctAlpha = SDL_TRUE;
-                        Amask = 0xFF000000;
-                        Rmask = 0x00FF0000;
-                        Gmask = 0x0000FF00;
-                        Bmask = 0x000000FF;
-                        break;
-                    default:
-                        break;
-                }
+                break;
+            case 32:
+                /* We don't know if this has alpha channel or not */
+                correctAlpha = SDL_TRUE;
+                Amask = 0xFF000000;
+                Rmask = 0x00FF0000;
+                Gmask = 0x0000FF00;
+                Bmask = 0x000000FF;
+                break;
+            default:
                 break;
             }
-            /* Fall through -- read the RGB masks */
+            break;
+
+        case BI_BITFIELDS:
+            break;  /* we handled this in the info header. */
 
         default:
-            switch (biBitCount) {
-                case 15:
-                case 16:
-                    Rmask = SDL_ReadLE32(src);
-                    Gmask = SDL_ReadLE32(src);
-                    Bmask = SDL_ReadLE32(src);
-                    break;
-                case 32:
-                    Rmask = SDL_ReadLE32(src);
-                    Gmask = SDL_ReadLE32(src);
-                    Bmask = SDL_ReadLE32(src);
-                    Amask = SDL_ReadLE32(src);
-                    break;
-                default:
-                    break;
-            }
             break;
     }
 
@@ -706,6 +735,14 @@ LoadICOCUR_RW(SDL_RWops * src, int type, int freesrc)
         goto done;
     }
 
+    /* sanity check image size, so we don't overflow integers, etc. */
+    if ((biWidth < 0) || (biWidth > 0xFFFFFF) ||
+        (biHeight < 0) || (biHeight > 0xFFFFFF)) {
+        IMG_SetError("Unsupported or invalid ICO dimensions");
+        was_error = SDL_TRUE;
+        goto done;
+    }
+
     /* Create a RGBA surface */
     biHeight = biHeight >> 1;
     //printf("%d x %d\n", biWidth, biHeight);
@@ -722,6 +759,11 @@ LoadICOCUR_RW(SDL_RWops * src, int type, int freesrc)
     if (biBitCount <= 8) {
         if (biClrUsed == 0) {
             biClrUsed = 1 << biBitCount;
+        }
+        if (biClrUsed > SDL_arraysize(palette)) {
+            IMG_SetError("Unsupported or incorrect biClrUsed field");
+            was_error = SDL_TRUE;
+            goto done;
         }
         for (i = 0; i < (int) biClrUsed; ++i) {
             SDL_RWread(src, &palette[i], 4, 1);
